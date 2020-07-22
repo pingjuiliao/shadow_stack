@@ -10,8 +10,8 @@ shadow stack llvm pass
 - ModulePass   - runOnModule()
 
 2. How to allocate memory ?
-- **IRBuilder - system call**
-- IRBuilder - libc function
+- IRBuilder - system call
+- **IRBuilder - libc function**
 - some API in llvm ?
 
 3. How to find function Prologue/Epilogue ?
@@ -19,8 +19,9 @@ shadow stack llvm pass
 - PPCFrameLowering->emitPrologue/emitEpilogue
 
 4. What style of code should we insert ?
-- **traditional shadow stack - checking**
-- traditional shadow stack - overwritting
+- traditional shadow stack - checking
+- **traditional shadow stack - overwritting**
 - parallel shadow stack
 
-
+## other files
+mmap/ : a sample code of how to use mmap in c

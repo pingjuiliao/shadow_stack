@@ -1,5 +1,6 @@
 #include "llvm/Pass.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
@@ -14,7 +15,11 @@ namespace {
         ShadowStackPass() : FunctionPass(ID) {}
         
         // Allocate shadow stack memory 
-        void createAllocationPrologue(void) {
+        void createAllocationPrologue(Function &F) {
+            BasicBlock &B   = F.getEntryBlock() ;
+            Instruction *pi = B.getFirstNonPHI() ; 
+            IRBuilder<> IRB(pi) ;
+            
         }
         
         // function prologue
@@ -29,7 +34,7 @@ namespace {
         virtual bool runOnFunction(Function &F) {
             errs() << "I saw a function called " << F.getName() << "!\n" ;
             if ( F.getName() == "main" ) {
-                createAllocationPrologue() ;
+                createAllocationPrologue(F) ;
             } else {
                 createShadowStackPrologue() ;
                 createShadowStackEpilogue() ;
