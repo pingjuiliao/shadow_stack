@@ -19,8 +19,8 @@ shadow stack llvm pass
 - PPCFrameLowering->emitPrologue/emitEpilogue
 
 4. What style of code should we insert ?
-- traditional shadow stack - checking
-- **traditional shadow stack - overwritting**
+- **traditional shadow stack - checking**
+- traditional shadow stack - overwritting
 - parallel shadow stack
 
 ## other files

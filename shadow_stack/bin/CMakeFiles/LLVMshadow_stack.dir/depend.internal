@@ -60,6 +60,7 @@ CMakeFiles/LLVMshadow_stack.dir/pass.cpp.o
  /usr/lib/llvm-6.0/include/llvm/IR/Instruction.def
  /usr/lib/llvm-6.0/include/llvm/IR/Instruction.h
  /usr/lib/llvm-6.0/include/llvm/IR/Instructions.h
+ /usr/lib/llvm-6.0/include/llvm/IR/IntrinsicInst.h
  /usr/lib/llvm-6.0/include/llvm/IR/Intrinsics.gen
  /usr/lib/llvm-6.0/include/llvm/IR/Intrinsics.h
  /usr/lib/llvm-6.0/include/llvm/IR/LLVMContext.h

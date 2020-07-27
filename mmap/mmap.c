@@ -40,6 +40,10 @@ mmap_syscall(void) {
 
 int
 main(int argc, char** argv) {
+    printf("sizeof(unsigned long) == 0x%lx\n", sizeof(unsigned long));
+    printf("sizeof(size_t) == 0x%lx\n", sizeof(size_t));
+    printf("sizeof(int)    == 0x%lx\n", sizeof(int));
+    
     mmap_libc() ;
     mmap_syscall() ;
     return 0 ;
