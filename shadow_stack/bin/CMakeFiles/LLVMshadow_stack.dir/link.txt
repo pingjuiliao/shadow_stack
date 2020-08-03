@@ -1,1 +1,0 @@
-/usr/bin/c++ -fPIC   -shared  -o libLLVMshadow_stack.so CMakeFiles/LLVMshadow_stack.dir/pass.cpp.o  -L/usr/lib/llvm-6.0/include 
