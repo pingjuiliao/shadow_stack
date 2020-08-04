@@ -28,9 +28,9 @@ namespace {
         
         virtual bool doInitialization(Module &M) {
             LLVMContext& C = M.getContext() ;
-            Constant* null = ConstantPointerNull::get(PointerType::getInt64PtrTy(C)) ;
-            shadow_sp = new GlobalVariable(M, Type::getInt64PtrTy(C), false, GlobalValue::CommonLinkage, null, "__shadow_stack_pointer");
-            shadow_bound = new GlobalVariable(M, Type::getInt64PtrTy(C), false, GlobalValue::CommonLinkage, null, "__shadow_stack_base") ;
+            Constant* null = ConstantPointerNull::get(Type::getInt8PtrTy(C)) ;
+            shadow_sp = new GlobalVariable(M, Type::getInt8PtrTy(C), false, GlobalValue::CommonLinkage, null, "__shadow_stack_pointer");
+            shadow_bound = new GlobalVariable(M, Type::getInt8PtrTy(C), false, GlobalValue::CommonLinkage, null, "__shadow_stack_base") ;
             return false ;    
         }
         
@@ -40,7 +40,7 @@ namespace {
             std::vector<Instruction*> ret_list ;
             if ( F.getName() == "main" ) {
                 createAllocationPrologue(F) ;
-            /*} else {
+            } else {
                 createShadowStackPrologue(F) ;
                 // search for epilogue (return instruction)
                 for ( auto pbb = F.begin() ; pbb != F.end() ; pbb ++  ) {
@@ -52,8 +52,8 @@ namespace {
                     }
                 }
                 for ( auto it = ret_list.begin() ; it != ret_list.end() ; ++it ) {
-                    createShadowStackEpilogue(*it) ; 
-                }*/
+                    // createShadowStackEpilogue(*it) ; 
+                }
             }
 
             return false ;
@@ -73,7 +73,6 @@ namespace {
             // FunctionCallee func_mmap   = M->getFunction("mmap") ;
             FunctionCallee func_mmap   = M->getOrInsertFunction("mmap", FunctionType::get(IRB.getInt8PtrTy(), true) ) ;
             FunctionCallee func_printf = M->getFunction("printf") ;
-            FunctionCallee func_memset = M->getFunction("memset") ;
             
             Value* hello = IRB.CreateGlobalStringPtr("Hello %d!!!\n") ; 
             Constant* zero = IRB.getInt32(0x0);
@@ -96,13 +95,14 @@ namespace {
 
             StoreInst* store_bound = IRB.CreateStore(call_mmap, shadow_bound);
             
-            /* 
+             
             // STORE shadow stack base
-            Constant* base_shift   = ConstantInt::get(IntegerType::getInt64Ty(C), 0x1000 - 8) ;
+            Constant* base_shift   = IRB.getInt64(0x1000 - 8);
             Value* shadow_base     = IRB.CreateInBoundsGEP(call_mmap, base_shift);
             StoreInst* store_ssp   = IRB.CreateStore(shadow_base, shadow_sp);
 
-            
+
+            // debug printf
             std::vector<Value*> arg_printf ;
             Value* bb_fstr =  IRB.CreateGlobalStringPtr("Bound: %p, Base: %p\n") ; 
             arg_printf.emplace_back(bb_fstr) ;
@@ -111,9 +111,9 @@ namespace {
             LoadInst* ss_base  = IRB.CreateLoad(shadow_sp) ;
             arg_printf.emplace_back(ss_base) ;
             IRB.CreateCall(func_printf, arg_printf) ; 
-            */
+            
         }
-        /* 
+         
         // function prologue
         void createShadowStackPrologue(Function &F) {
             // 
@@ -123,38 +123,36 @@ namespace {
             Module *M = pi->getModule() ;
             
             
-            FunctionCallee func_printf = M->getOrInsertFunction("printf", IntegerType::getInt32Ty(C)); 
-            FunctionCallee func_retaddr = M->getOrInsertFunction("llvm.returnaddress", PointerType::getInt8PtrTy(C));   
-            Constant* null = ConstantPointerNull::get(PointerType::getInt8PtrTy(C)) ;
-            if ( F.hasPrefixData() ) {  // Useless
-                Constant *d = F.getPrefixData() ;
-                errs() << "hasPrefixData!!\n"  ;
-            }
-            if ( F.hasPrologueData() ) { // Useless
-                Constant *e = F.getPrologueData() ;
-                errs() << "hasPrologueData!!\n" ;
-            }
-            AttributeList att_list = F.getAttributes();  
-            
             IRBuilder<> IRB(pi) ; 
+            FunctionCallee func_printf = M->getFunction("printf"); 
+            FunctionCallee func_exit   = M->getFunction("exit") ;
+            Intrinsic::ID retaddr_id  = Function::lookupIntrinsicID("llvm.returnaddress") ;
+            errs() << "ID : " << retaddr_id << "\n" ;
+            FunctionCallee func_retaddr = Intrinsic::getDeclaration(M, retaddr_id);
+            
+            // FunctionCallee func_retaddr = M->getOrInsertFunction("llvm.returnaddress", FunctionType::get(Type::getInt8PtrTy(C), true)); 
+            // Constant* null = ConstantPointerNull::get(PointerType::getInt8PtrTy(C)) ;
+            
             // call llvm.returnaddress ( a codegen intrinsic )
-            Constant* zero = ConstantInt::get(IntegerType::getInt32Ty(C), 0x0);
+            Constant* zero = IRB.getInt32(0x0) ;
             CallInst* get_retaddr = IRB.CreateCall(func_retaddr, zero);
             
             // call printf("%p\n", p) ; 
-           
+            Value* fstr = IRB.CreateGlobalStringPtr("retaddr : %p\n") ;
+            std::vector<Value *> args_printf({fstr, get_retaddr}) ;
+            CallInst* call_print_retaddr = IRB.CreateCall(func_printf, args_printf);
             // __shadow_stack_ptr -= sizeof(void *) ; // stack grows backward
+            /*
             LoadInst* ssp = IRB.CreateLoad(shadow_sp) ;
-            Constant* neg_eight = 
-                ConstantInt::get(IntegerType::getInt64Ty(C), -0x8) ; 
+            Constant* neg_eight = IRB.getInt64(-0x8) ; 
             Value* gep = IRB.CreateInBoundsGEP(ssp, neg_eight) ;
             StoreInst* shadow_push = IRB.CreateStore(gep, shadow_sp) ;
-
+            */
             // *__shadow_stack_ptr = <return address> ; 
             LoadInst* updated_ssp = IRB.CreateLoad(shadow_sp) ;
             StoreInst* store_retaddr = IRB.CreateStore(get_retaddr, updated_ssp); 
-       }
-        
+        }
+        /*        
         // function epilogue
         void createShadowStackEpilogue(Instruction *pi) {
 
