@@ -22,15 +22,34 @@ using namespace llvm;
 namespace {
     struct ShadowStackPass : public FunctionPass {
         static char ID ;
+        bool debug ;
         GlobalVariable* shadow_bound ;
         GlobalVariable* shadow_sp ;
         ShadowStackPass() : FunctionPass(ID) {}
         
         virtual bool doInitialization(Module &M) {
             LLVMContext& C = M.getContext() ;
-            Constant* null = ConstantPointerNull::get(Type::getInt8PtrTy(C)) ;
-            shadow_sp = new GlobalVariable(M, Type::getInt8PtrTy(C), false, GlobalValue::CommonLinkage, null, "__shadow_stack_pointer");
-            shadow_bound = new GlobalVariable(M, Type::getInt8PtrTy(C), false, GlobalValue::CommonLinkage, null, "__shadow_stack_base") ;
+            PointerType* ty= PointerType::get(Type::getInt8PtrTy(C), 0); 
+            Constant* null = ConstantPointerNull::get(ty) ;
+            
+            debug = false ;
+            /**************************
+             *** Function Insertion
+             *************************/
+            M.getOrInsertFunction("mmap", FunctionType::get(Type::getInt8PtrTy(C), true) ) ;
+            M.getOrInsertFunction("printf", FunctionType::get(Type::getInt32Ty(C), true) ) ;
+            M.getOrInsertFunction("exit", FunctionType::get(Type::getInt32Ty(C), { Type::getInt32Ty(C) }, false)) ; 
+            
+            Intrinsic::ID retaddr_id  = Function::lookupIntrinsicID("llvm.returnaddress") ;
+            Intrinsic::getDeclaration(&M, retaddr_id);
+
+            /**************************
+             *** Global Variable
+             **************************/
+            // i8** __shadow_stack_pointer ;
+            shadow_sp = new GlobalVariable(M, ty, false, GlobalValue::CommonLinkage, null, "__shadow_stack_pointer");
+            // i8** __shadow_stack_bound  ; 
+            shadow_bound = new GlobalVariable(M, ty, false, GlobalValue::CommonLinkage, null, "__shadow_stack_bound") ;
             return false ;    
         }
         
@@ -52,7 +71,7 @@ namespace {
                     }
                 }
                 for ( auto it = ret_list.begin() ; it != ret_list.end() ; ++it ) {
-                    // createShadowStackEpilogue(*it) ; 
+                    createShadowStackEpilogue(*it) ; 
                 }
             }
 
@@ -69,15 +88,13 @@ namespace {
             Constant* null      = ConstantPointerNull::get(PointerType::getInt8PtrTy(C)) ;
             
             IRBuilder<> IRB(pi) ; 
-
-            // FunctionCallee func_mmap   = M->getFunction("mmap") ;
-            FunctionCallee func_mmap   = M->getOrInsertFunction("mmap", FunctionType::get(IRB.getInt8PtrTy(), true) ) ;
+            FunctionCallee func_mmap   = M->getFunction("mmap") ;
             FunctionCallee func_printf = M->getFunction("printf") ;
             
             Value* hello = IRB.CreateGlobalStringPtr("Hello %d!!!\n") ; 
             Constant* zero = IRB.getInt32(0x0);
             std::vector<Value *> args_puts({hello, zero}) ;
-            CallInst* call_printf = IRB.CreateCall(func_printf, args_puts);
+            IRB.CreateCall(func_printf, args_puts);
             
             // p = mmap(...)
             Constant* mapped_size = IRB.getInt64(0x1000) ; 
@@ -86,77 +103,83 @@ namespace {
             Constant* fd          = IRB.getInt32(0xffffffff) ;
             std::vector<Value *> args_mmap({null, mapped_size, prot_rw, 
                                             map_private, fd, zero}) ;
-            Value* call_mmap   = IRB.CreateCall(func_mmap, args_mmap);
+            CallInst* call_mmap   = IRB.CreateCall(func_mmap, args_mmap);
+            
+            // bitcast i8* to i8**
+            Type*  ty           = shadow_bound->getType()->getElementType() ;
+            Value* bitcast_mmap = IRB.CreateBitCast(call_mmap, ty) ;
             
             // STORE shadow stack bound
             // TODO : hide this (instead of using global variable)
-            // Value*    ret_mmap     = dyn_cast<Value>(call_mmap) ;
-            // errs() << cast<shadow_bound:
-
-            StoreInst* store_bound = IRB.CreateStore(call_mmap, shadow_bound);
+            IRB.CreateStore(bitcast_mmap, shadow_bound);
             
-             
             // STORE shadow stack base
-            Constant* base_shift   = IRB.getInt64(0x1000 - 8);
-            Value* shadow_base     = IRB.CreateInBoundsGEP(call_mmap, base_shift);
-            StoreInst* store_ssp   = IRB.CreateStore(shadow_base, shadow_sp);
+            Constant* base_shift   = IRB.getInt64((0x1000 - 8) / 8);
+            Value* shadow_base     = IRB.CreateInBoundsGEP(bitcast_mmap, base_shift);
+            IRB.CreateStore(shadow_base, shadow_sp);
 
 
-            // debug printf
-            std::vector<Value*> arg_printf ;
-            Value* bb_fstr =  IRB.CreateGlobalStringPtr("Bound: %p, Base: %p\n") ; 
-            arg_printf.emplace_back(bb_fstr) ;
-            LoadInst* ss_bound = IRB.CreateLoad(shadow_bound);
-            arg_printf.emplace_back(ss_bound) ;
-            LoadInst* ss_base  = IRB.CreateLoad(shadow_sp) ;
-            arg_printf.emplace_back(ss_base) ;
-            IRB.CreateCall(func_printf, arg_printf) ; 
-            
+            // printf DEBUG
+            if ( debug ) {
+                std::vector<Value*> arg_printf ;
+                Value* bb_fstr =  IRB.CreateGlobalStringPtr("Bound: %p, Base: %p\n") ; 
+                arg_printf.emplace_back(bb_fstr) ;
+                LoadInst* ss_bound = IRB.CreateLoad(shadow_bound);
+                arg_printf.emplace_back(ss_bound) ;
+                LoadInst* ss_base  = IRB.CreateLoad(shadow_sp) ;
+                arg_printf.emplace_back(ss_base) ;
+                IRB.CreateCall(func_printf, arg_printf) ; 
+                  
+            }
         }
          
         // function prologue
         void createShadowStackPrologue(Function &F) {
-            // 
             BasicBlock &B   = F.getEntryBlock() ;
             Instruction *pi = B.getFirstNonPHI() ; 
-            LLVMContext& C = pi->getContext() ;
             Module *M = pi->getModule() ;
             
+            // function callees
+            FunctionCallee func_printf  = M->getFunction("printf"); 
+            FunctionCallee func_retaddr = M->getFunction("llvm.returnaddress") ;
+        
             
             IRBuilder<> IRB(pi) ; 
-            FunctionCallee func_printf = M->getFunction("printf"); 
-            FunctionCallee func_exit   = M->getFunction("exit") ;
-            Intrinsic::ID retaddr_id  = Function::lookupIntrinsicID("llvm.returnaddress") ;
-            errs() << "ID : " << retaddr_id << "\n" ;
-            FunctionCallee func_retaddr = Intrinsic::getDeclaration(M, retaddr_id);
-            
-            // FunctionCallee func_retaddr = M->getOrInsertFunction("llvm.returnaddress", FunctionType::get(Type::getInt8PtrTy(C), true)); 
-            // Constant* null = ConstantPointerNull::get(PointerType::getInt8PtrTy(C)) ;
             
             // call llvm.returnaddress ( a codegen intrinsic )
             Constant* zero = IRB.getInt32(0x0) ;
             CallInst* get_retaddr = IRB.CreateCall(func_retaddr, zero);
             
-            // call printf("%p\n", p) ; 
-            Value* fstr = IRB.CreateGlobalStringPtr("retaddr : %p\n") ;
-            std::vector<Value *> args_printf({fstr, get_retaddr}) ;
-            CallInst* call_print_retaddr = IRB.CreateCall(func_printf, args_printf);
+            // DEBUG : call printf("%p\n", p) ; 
+            if ( debug ) {
+                Value* fstr = IRB.CreateGlobalStringPtr("retaddr : %p\n") ;
+                std::vector<Value *> args_printf({fstr, get_retaddr}) ;
+                IRB.CreateCall(func_printf, args_printf);
+            }
+
             // __shadow_stack_ptr -= sizeof(void *) ; // stack grows backward
-            /*
             LoadInst* ssp = IRB.CreateLoad(shadow_sp) ;
-            Constant* neg_eight = IRB.getInt64(-0x8) ; 
+            Constant* neg_eight = IRB.getInt64(-0x8 / 8) ; 
             Value* gep = IRB.CreateInBoundsGEP(ssp, neg_eight) ;
-            StoreInst* shadow_push = IRB.CreateStore(gep, shadow_sp) ;
-            */
+            IRB.CreateStore(gep, shadow_sp) ;
+            
             // *__shadow_stack_ptr = <return address> ; 
             LoadInst* updated_ssp = IRB.CreateLoad(shadow_sp) ;
-            StoreInst* store_retaddr = IRB.CreateStore(get_retaddr, updated_ssp); 
+            IRB.CreateStore(get_retaddr, updated_ssp); 
+            
+            // DEBUG 
+            if ( debug ) {
+                Value* dfstr = IRB.CreateGlobalStringPtr("%p: %p has store\n") ;
+                LoadInst* load_ssp  = IRB.CreateLoad(shadow_sp) ;
+                LoadInst* load_cssp = IRB.CreateLoad(load_ssp) ;
+                std::vector<Value *> v({dfstr, load_ssp, load_cssp}) ;
+                IRB.CreateCall(func_printf, v) ;
+            }
         }
-        /*        
+        
         // function epilogue
         void createShadowStackEpilogue(Instruction *pi) {
 
-            LLVMContext& C = pi->getContext() ;
             Module *M = pi->getModule() ;
             BasicBlock* BB = pi->getParent() ;
             
@@ -165,44 +188,46 @@ namespace {
             BasicBlock* BB_ret  = BB_exit->splitBasicBlock(pi) ;
             
             // functions
-            FunctionCallee func_printf = M->getOrInsertFunction("printf", IntegerType::getInt32Ty(C)); 
-            FunctionCallee func_retaddr= M->getOrInsertFunction("llvm.returnaddress", PointerType::getInt8PtrTy(C)) ;
-            FunctionCallee func_exit   = M->getOrInsertFunction("exit", Type::getVoidTy(C)) ;
-
-            Constant* null = ConstantPointerNull::get(PointerType::getInt8PtrTy(C)) ;
-            ConstantInt* zero = ConstantInt::get(IntegerType::getInt64Ty(C), 0x0) ;
-            // IRB_chk
+            FunctionCallee func_printf = M->getFunction("printf")  ;
+            FunctionCallee func_retaddr= M->getFunction("llvm.returnaddress") ;
+            FunctionCallee func_exit   = M->getFunction("exit");
+            
+            /***********************
+             *** IRB_chk
+             ***********************/
             IRBuilder<> IRB_chk(BB_chk->getTerminator()) ;
-            // Value* fstr = IRB_chk.CreateGlobalStringPtr("Will !!!!!!!!!\n") ;
-            // CallInst* call_printf= IRB_chk.CreateCall(func_printf, fstr) ;
-            CallInst* get_retaddr= IRB_chk.CreateCall(func_retaddr, zero);
-            Value*    p64_retaddr= IRB_chk.CreateBitCast(get_retaddr, IntegerType::getInt64Ty(C));
+            Constant* i32_zero    = IRB_chk.getInt32(0) ;
+            CallInst* get_retaddr = IRB_chk.CreateCall(func_retaddr, i32_zero); 
             LoadInst* load_shadow_sp   = IRB_chk.CreateLoad(shadow_sp);
             LoadInst* load_shadow_addr = IRB_chk.CreateLoad(load_shadow_sp) ;
-            Value* cmp_retaddr = IRB_chk.CreateICmpEQ(p64_retaddr, load_shadow_addr) ;
-            BranchInst* br_retaddr = IRB_chk.CreateCondBr(cmp_retaddr, BB_ret, BB_exit) ;
+            Value* cmp_retaddr = IRB_chk.CreateICmpEQ(get_retaddr, load_shadow_addr) ;
+            IRB_chk.CreateCondBr(cmp_retaddr, BB_ret, BB_exit) ;
             BB_chk->getTerminator()->eraseFromParent() ;
-
-            // IRB_exit
+            
+            /***********************
+             *** IRB_exit
+             ***********************/
             IRBuilder<> IRB_exit(BB_exit->getTerminator()) ;
             Value* error_msg = IRB_exit.CreateGlobalStringPtr("[ERROR] Return address compromised !!!!\n") ;
-            CallInst* print_error_msg = IRB_exit.CreateCall(func_printf, error_msg);
-            Constant* neg_one = ConstantInt::get(IntegerType::getInt64Ty(C), -1);
-            CallInst* exit    = IRB_exit.CreateCall(func_exit, neg_one) ; 
-            UnreachableInst* unreach = IRB_exit.CreateUnreachable() ;
+            IRB_exit.CreateCall(func_printf, error_msg);
+            
+            Constant* i32_neg_one = IRB_exit.getInt32(-1) ;
+            IRB_exit.CreateCall(func_exit, i32_neg_one) ; 
+            IRB_exit.CreateUnreachable() ;
             BB_exit->getTerminator()->eraseFromParent() ;
-
-            // IRB_ret
+            
+            
+            /***********************
+             *** IRB_ret
+             ***********************/
             IRBuilder<> IRB_ret(BB_ret->getTerminator()) ;
             LoadInst* load_ssp = IRB_ret.CreateLoad(shadow_sp) ;
-            Constant* eight    = ConstantInt::get(IntegerType::getInt64Ty(C), 0x8) ;
+            Constant* eight    = IRB_ret.getInt64(0x8 / 8);
             Value* gep = IRB_ret.CreateInBoundsGEP(load_ssp, eight);
-            StoreInst* store_ssp = IRB_ret.CreateStore(gep, shadow_sp) ;  
-            
-            // An IR to make sure it's LLVM 10.0.0
-            // Value* freeze  = IRB_ret.CreateFreeze(gep) ;
+            IRB_ret.CreateStore(gep, shadow_sp) ;  
+        
         }
-        */
+        
     };
 }
 
