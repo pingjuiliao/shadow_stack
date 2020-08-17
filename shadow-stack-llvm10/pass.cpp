@@ -247,6 +247,8 @@ static RegisterStandardPasses
 RegisterMyPass(PassManagerBuilder::EP_EarlyAsPossible, registerShadowStackPass);
 */
 
+
+// Legacy Registration
 static RegisterStandardPasses Y(
         PassManagerBuilder::EP_EarlyAsPossible,
         [](const PassManagerBuilder &Builder,
