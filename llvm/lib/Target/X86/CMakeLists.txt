@@ -50,6 +50,7 @@ set(sources
   X86InstrFoldTables.cpp
   X86InstrInfo.cpp
   X86EvexToVex.cpp
+  X86ShadowStackPass.cpp
   X86LegalizerInfo.cpp
   X86MCInstLower.cpp
   X86MachineFunctionInfo.cpp

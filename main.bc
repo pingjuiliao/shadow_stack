@@ -1,0 +1,145 @@
+; ModuleID = './main.c'
+source_filename = "./main.c"
+target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-unknown-linux-gnu"
+
+%struct._IO_FILE = type { i32, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, %struct._IO_marker*, %struct._IO_FILE*, i32, i32, i64, i16, i8, [1 x i8], i8*, i64, i8*, i8*, i8*, i8*, i64, i32, [20 x i8] }
+%struct._IO_marker = type { %struct._IO_marker*, %struct._IO_FILE*, i32 }
+
+@.str = private unnamed_addr constant [6 x i8] c"hello\00", align 1
+@stdin = external dso_local global %struct._IO_FILE*, align 8
+@.str.1 = private unnamed_addr constant [25 x i8] c"Please input your name :\00", align 1
+@stderr = external dso_local global %struct._IO_FILE*, align 8
+@.str.2 = private unnamed_addr constant [14 x i8] c"read() error\0A\00", align 1
+@.str.3 = private unnamed_addr constant [13 x i8] c"Welcome, %s\0A\00", align 1
+@.str.4 = private unnamed_addr constant [20 x i8] c"counting down : %u\0A\00", align 1
+@s = dso_local global i8* getelementptr inbounds ([20 x i8], [20 x i8]* @.str.4, i32 0, i32 0), align 8
+@.str.5 = private unnamed_addr constant [25 x i8] c"retaddr saved in %p: %p\0A\00", align 1
+
+; Function Attrs: noinline nounwind optnone uwtable
+define dso_local i32 @main(i32 %argc, i8** %argv) #0 {
+entry:
+  %retval = alloca i32, align 4
+  %argc.addr = alloca i32, align 4
+  %argv.addr = alloca i8**, align 8
+  store i32 0, i32* %retval, align 4
+  store i32 %argc, i32* %argc.addr, align 4
+  store i8** %argv, i8*** %argv.addr, align 8
+  call void @hello()
+  call void @countdown(i32 5)
+  call void @bufovfl()
+  ret i32 0
+}
+
+; Function Attrs: noinline nounwind optnone uwtable
+define dso_local void @hello() #0 {
+entry:
+  %call = call i32 @puts(i8* getelementptr inbounds ([6 x i8], [6 x i8]* @.str, i64 0, i64 0))
+  ret void
+}
+
+; Function Attrs: noinline nounwind optnone uwtable
+define dso_local void @countdown(i32 %n) #0 {
+entry:
+  %n.addr = alloca i32, align 4
+  %buf = alloca [50 x i8], align 16
+  %p = alloca i64*, align 8
+  store i32 %n, i32* %n.addr, align 4
+  %arraydecay = getelementptr inbounds [50 x i8], [50 x i8]* %buf, i64 0, i64 0
+  call void @llvm.memset.p0i8.i64(i8* align 16 %arraydecay, i8 0, i64 50, i1 false)
+  %arraydecay1 = getelementptr inbounds [50 x i8], [50 x i8]* %buf, i64 0, i64 0
+  %0 = load i8*, i8** @s, align 8
+  %call = call i8* @strcpy(i8* %arraydecay1, i8* %0) #5
+  %arraydecay2 = getelementptr inbounds [50 x i8], [50 x i8]* %buf, i64 0, i64 0
+  %1 = load i32, i32* %n.addr, align 4
+  %call3 = call i32 (i8*, ...) @printf(i8* %arraydecay2, i32 %1)
+  %2 = load i32, i32* %n.addr, align 4
+  %cmp = icmp eq i32 %2, 0
+  br i1 %cmp, label %if.then, label %if.end
+
+if.then:                                          ; preds = %entry
+  br label %return
+
+if.end:                                           ; preds = %entry
+  %3 = load i32, i32* %n.addr, align 4
+  %sub = sub i32 %3, 1
+  call void @countdown(i32 %sub)
+  %4 = call i64* asm "leaq 0x8(%rbp), $0;\0A\09", "=r,~{dirflag},~{fpsr},~{flags}"() #6, !srcloc !2
+  store i64* %4, i64** %p, align 8
+  %5 = load i64*, i64** %p, align 8
+  %6 = load i64*, i64** %p, align 8
+  %7 = load i64, i64* %6, align 8
+  %8 = inttoptr i64 %7 to i8*
+  %call4 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([25 x i8], [25 x i8]* @.str.5, i64 0, i64 0), i64* %5, i8* %8)
+  br label %return
+
+return:                                           ; preds = %if.end, %if.then
+  ret void
+}
+
+; Function Attrs: noinline nounwind optnone uwtable
+define dso_local void @bufovfl() #0 {
+entry:
+  %r = alloca i32, align 4
+  %buf = alloca [20 x i8], align 16
+  store i32 0, i32* %r, align 4
+  %0 = load %struct._IO_FILE*, %struct._IO_FILE** @stdin, align 8
+  %call = call i32 @setvbuf(%struct._IO_FILE* %0, i8* null, i32 0, i64 0) #5
+  %arraydecay = getelementptr inbounds [20 x i8], [20 x i8]* %buf, i64 0, i64 0
+  call void @llvm.memset.p0i8.i64(i8* align 16 %arraydecay, i8 0, i64 20, i1 false)
+  %call1 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([25 x i8], [25 x i8]* @.str.1, i64 0, i64 0))
+  %arraydecay2 = getelementptr inbounds [20 x i8], [20 x i8]* %buf, i64 0, i64 0
+  %call3 = call i64 @read(i32 0, i8* %arraydecay2, i64 50)
+  %conv = trunc i64 %call3 to i32
+  store i32 %conv, i32* %r, align 4
+  %1 = load i32, i32* %r, align 4
+  %cmp = icmp eq i32 %1, 0
+  br i1 %cmp, label %if.then, label %if.end
+
+if.then:                                          ; preds = %entry
+  %2 = load %struct._IO_FILE*, %struct._IO_FILE** @stderr, align 8
+  %call5 = call i32 (%struct._IO_FILE*, i8*, ...) @fprintf(%struct._IO_FILE* %2, i8* getelementptr inbounds ([14 x i8], [14 x i8]* @.str.2, i64 0, i64 0))
+  call void @exit(i32 -1) #7
+  unreachable
+
+if.end:                                           ; preds = %entry
+  %arraydecay6 = getelementptr inbounds [20 x i8], [20 x i8]* %buf, i64 0, i64 0
+  %call7 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([13 x i8], [13 x i8]* @.str.3, i64 0, i64 0), i8* %arraydecay6)
+  ret void
+}
+
+declare dso_local i32 @puts(i8*) #1
+
+; Function Attrs: nounwind
+declare dso_local i32 @setvbuf(%struct._IO_FILE*, i8*, i32, i64) #2
+
+; Function Attrs: argmemonly nounwind willreturn
+declare void @llvm.memset.p0i8.i64(i8* nocapture writeonly, i8, i64, i1 immarg) #3
+
+declare dso_local i32 @printf(i8*, ...) #1
+
+declare dso_local i64 @read(i32, i8*, i64) #1
+
+declare dso_local i32 @fprintf(%struct._IO_FILE*, i8*, ...) #1
+
+; Function Attrs: noreturn nounwind
+declare dso_local void @exit(i32) #4
+
+; Function Attrs: nounwind
+declare dso_local i8* @strcpy(i8*, i8*) #2
+
+attributes #0 = { noinline nounwind optnone uwtable "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "frame-pointer"="all" "less-precise-fpmad"="false" "min-legal-vector-width"="0" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #1 = { "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "frame-pointer"="all" "less-precise-fpmad"="false" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #2 = { nounwind "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "frame-pointer"="all" "less-precise-fpmad"="false" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #3 = { argmemonly nounwind willreturn }
+attributes #4 = { noreturn nounwind "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "frame-pointer"="all" "less-precise-fpmad"="false" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #5 = { nounwind }
+attributes #6 = { nounwind readnone }
+attributes #7 = { noreturn nounwind }
+
+!llvm.module.flags = !{!0}
+!llvm.ident = !{!1}
+
+!0 = !{i32 1, !"wchar_size", i32 4}
+!1 = !{!"clang version 10.0.0 (https://github.com/llvm/llvm-project.git d32170dbd5b0d54436537b6b75beaf44324e0c28)"}
+!2 = !{i32 892, i32 915}

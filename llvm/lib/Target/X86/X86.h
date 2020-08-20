@@ -134,6 +134,7 @@ InstructionSelector *createX86InstructionSelector(const X86TargetMachine &TM,
                                                   X86RegisterBankInfo &);
 
 FunctionPass *createX86SpeculativeLoadHardeningPass();
+FunctionPass *createX86ShadowStackPass();
 
 void initializeEvexToVexInstPassPass(PassRegistry &);
 void initializeFixupBWInstPassPass(PassRegistry &);
@@ -150,6 +151,7 @@ void initializeX86ExpandPseudoPass(PassRegistry &);
 void initializeX86FlagsCopyLoweringPassPass(PassRegistry &);
 void initializeX86OptimizeLEAPassPass(PassRegistry &);
 void initializeX86SpeculativeLoadHardeningPassPass(PassRegistry &);
+void initializeX86ShadowStackPassPass(PassRegistry &);
 
 namespace X86AS {
 enum : unsigned {
