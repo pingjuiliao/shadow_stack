@@ -34,11 +34,22 @@ namespace {
 
         virtual bool runOnMachineFunction(MachineFunction &MF) {
             errs() << "this is " << MF.getName() << " function !\n" ; 
+            
+            // main func prologue
             if ( MF.getName() == "main" ) {
                 createShadowStackSetup(MF) ;
-            } else {
-                createShadowStackPrologue(MF) ; 
+                return true ;
+            }
 
+            // prologue
+            createShadowStackPrologue(MF) ; 
+            // epilogue
+            for ( auto &MBB: MF ) {
+
+                MachineInstr &MI = MBB.instr_back() ;
+                if ( MI.isReturn() )  {
+                    createShadowStackEpilogue(MF, MBB, MI) ;
+                }
             }
             return true ;
         }
@@ -147,6 +158,7 @@ namespace {
                 .addReg(X86::RAX)
                 .addImm(8) ;
             
+            // mov %rax, %gs:0x0
             BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV64mr))
                 .addReg(0x0)
                 .addImm(0x1)
@@ -156,8 +168,59 @@ namespace {
                 .addReg(X86::RAX);
             // NOP for debug 
             BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::NOOP)) ;
-            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::NOOP)) ;
-            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::NOOP)) ;
+        }
+
+        void createShadowStackEpilogue(MachineFunction &MF, MachineBasicBlock &thisMBB, MachineInstr &MI) {
+            
+            const X86Subtarget &STI = MF.getSubtarget<X86Subtarget>() ;
+            const X86InstrInfo *X86II = STI.getInstrInfo() ;
+
+            // Machine Function Info
+            DebugLoc DL = MI.getDebugLoc() ;
+            
+            BuildMI(thisMBB, MI, DL, X86II->get(X86::NOOP)) ;
+            BuildMI(thisMBB, MI, DL, X86II->get(X86::NOOP)) ;
+            BuildMI(thisMBB, MI, DL, X86II->get(X86::NOOP)) ;
+            BuildMI(thisMBB, MI, DL, X86II->get(X86::NOOP)) ;
+
+            // mov %gs:0x0, %rax
+            BuildMI(thisMBB, MI, DL, X86II->get(X86::MOV64rm), X86::RAX)
+                .addReg(0)
+                .addImm(1)
+                .addReg(0)
+                .addImm(0)
+                .addReg(X86::GS) ;
+            
+            // sub %rax, 8
+            BuildMI(thisMBB, MI, DL, X86II->get(X86::SUB64ri32), X86::RAX)
+                .addReg(X86::RAX)
+                .addImm(0x8);
+
+            // mov 0x0(%rax), %rbx
+            BuildMI(thisMBB, MI, DL, X86II->get(X86::MOV64rm), X86::RBX)
+                .addReg(X86::RAX)
+                .addImm(0x1)
+                .addReg(0)
+                .addImm(0x0)
+                .addReg(0) ;
+
+            // mov %rbx, 0x8(%rbp)
+            BuildMI(thisMBB, MI, DL, X86II->get(X86::MOV64mr))
+                .addReg(X86::RBP)
+                .addImm(0x1)
+                .addReg(0)
+                .addImm(0x8)
+                .addReg(0)
+                .addReg(X86::RBX) ;
+           
+            // mov %rax, %gs:0x0
+            BuildMI(thisMBB, MI, DL, X86II->get(X86::MOV64mr))
+                .addReg(0)
+                .addImm(0x1)
+                .addReg(0)
+                .addImm(0x0)
+                .addReg(X86::GS)
+                .addReg(X86::RAX) ;
         }
 
         StringRef getPassName() const override {
