@@ -8,8 +8,22 @@ void bufovfl(void);
 void hello(void) ;
 void countdown(unsigned n) ;
 
+
+void
+tell_main(void) {
+    char buf[50];
+    memset(buf, 0, sizeof(buf)) ;
+    strcpy(buf, "hello, this is main");
+    puts(buf) ;
+}
+
 int
 main( int argc, char** argv) {
+    char buf[70] ;
+    memset(buf, 0, sizeof(buf)) ;
+    strcpy(buf, "hello, this is main");
+    puts(buf) ;
+    tell_main(); 
     hello() ;
     countdown(5) ;
     bufovfl() ;

@@ -66,20 +66,20 @@ namespace {
             //                      MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) ;
             BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV64ri), X86::RDI)
                 .addImm(0x0) ;
-            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV64ri32), X86::ESI)
+            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV32ri), X86::ESI)
                 .addImm(0x1000);
-            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV64ri32), X86::EDX)
+            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV32ri), X86::EDX)
                 .addImm(0x3);
-            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV64ri32), X86::ECX)
+            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV32ri), X86::ECX)
                 .addImm(0x22);
-            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV64ri32), X86::R8D)
+            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV32ri), X86::R8D)
                 .addImm(0xffffffff);
-            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV64ri32), X86::R9D)
+            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV32ri), X86::R9D)
                 .addImm(0x0);
             BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::CALL64pcrel32))
                 .addExternalSymbol("mmap");
             BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV64rr), X86::RBX)
-                .addReg(X86::RAX) ;
+                .addReg(X86::RAX, RegState::Define) ;
 
             // arch_prctl(ARCH_SET_GS, gsbase);
             BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV64ri32), X86::RDI)
@@ -92,15 +92,15 @@ namespace {
             // void *shadow_stack_top = mmap(NULL, 0x1000, ... ) 
             BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV64ri), X86::RDI)
                 .addImm(0x0) ;
-            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV64ri32), X86::ESI)
+            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV32ri), X86::ESI)
                 .addImm(0x1000);
-            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV64ri32), X86::EDX)
+            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV32ri), X86::EDX)
                 .addImm(0x3);
-            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV64ri32), X86::ECX)
+            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV32ri), X86::ECX)
                 .addImm(0x22);
-            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV64ri32), X86::R8D)
+            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV32ri), X86::R8D)
                 .addImm(0xffffffff);
-            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV64ri32), X86::R9D)
+            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV32ri), X86::R9D)
                 .addImm(0x0);
             BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::CALL64pcrel32))
                 .addExternalSymbol("mmap");
@@ -109,8 +109,9 @@ namespace {
             // mov %shadow_stack_top, (%gsbase) 
             // ATT: mov %rax, 0x0(%rbx)
             addRegOffset(BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::MOV64mr))
-                    , X86::RBX, false, 0x0)
-                .addReg(X86::RAX);
+                     , X86::RBX, false, 0x0)
+                .addReg(X86::RAX, RegState::Define);
+
             BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::XOR64rr), X86::RBX)
                 .addReg(X86::RBX, RegState::Undef)
                 .addReg(X86::RBX, RegState::Undef);
@@ -119,7 +120,7 @@ namespace {
                 .addReg(X86::RAX, RegState::Undef);
             
             // NOP for debug
-            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::NOOP));
+            // BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::NOOP));
         }
 
         void createShadowStackPrologue(MachineFunction &MF) {
@@ -166,8 +167,13 @@ namespace {
                 .addImm(0x0)
                 .addReg(X86::GS)
                 .addReg(X86::RAX);
+            // xor %rax, %rax
+            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::XOR64rr), X86::RAX)
+                .addReg(X86::RAX, RegState::Undef)
+                .addReg(X86::RAX, RegState::Undef);
+            
             // NOP for debug 
-            BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::NOOP)) ;
+            // BuildMI(FirstMBB, MBBI, DL, X86II->get(X86::NOOP)) ;
         }
 
         void createShadowStackEpilogue(MachineFunction &MF, MachineBasicBlock &thisMBB, MachineInstr &MI) {
@@ -221,6 +227,13 @@ namespace {
                 .addImm(0x0)
                 .addReg(X86::GS)
                 .addReg(X86::RAX) ;
+
+            // xor %rax, %rax
+            BuildMI(thisMBB, MI, DL, X86II->get(X86::XOR64rr), X86::RAX)
+                .addReg(X86::RAX, RegState::Undef)
+                .addReg(X86::RAX, RegState::Undef);
+            
+
         }
 
         StringRef getPassName() const override {
