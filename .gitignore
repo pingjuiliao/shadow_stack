@@ -3,4 +3,5 @@
 **/peda*
 **/build
 **/a.out
-
+./main.bc
+./main.o
