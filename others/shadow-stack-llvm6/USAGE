@@ -1,0 +1,18 @@
+## This directory 
+
+This directory contains a template of LLVM pass .
+To create the basic template :
+```
+$ mkdir bin/
+$ cd bin
+$ cmake ..
+$ make
+```
+
+In ./bin directory, to modify LLVM pass :
+```
+$ pwd
+$ vi ../pass.cpp
+$ make      ## This compiles the LLVM pass 
+$ ./compile ## This will compile and instrument the main.c app
+```
