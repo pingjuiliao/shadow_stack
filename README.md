@@ -77,7 +77,7 @@ xor %rax, %rax
 - parallel shadow stack
 
 ## other files
-1. ./c-draft/ : some sample codes of how to use certain function in c and check Macros number
-2. shadow-stack-llvm10 : compromised shadow stack using global variable, implemented in llvm-10
-3. shadow-stack-llvm6  : compromised shadow stack using global variable, implemented in llvm-6
+1. ./others/c-draft/ : some sample codes of how to use certain function in c and check Macros number
+2. ./others/shadow-stack-llvm10 : compromised shadow stack using global variable, implemented in llvm-10
+3. ./others/shadow-stack-llvm6  : compromised shadow stack using global variable, implemented in llvm-6
 
