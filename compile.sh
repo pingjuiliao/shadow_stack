@@ -9,4 +9,4 @@ MY_CLANG=./llvm-project-10.0.1/build/bin/clang
 #./llvm/build/bin/llc --filetype=obj ${IR_FILE}
 #/usr/bin/clang ${OBJ_FILE} -o  ${BIN_FILE}
 
-${MY_CLANG} ${SOUCE_FILE} -o ${BIN_FILE}
+${MY_CLANG} ${SOURCE_FILE} -o ${BIN_FILE}
